@@ -10,6 +10,8 @@ L'objectif : donner aux équipes DSI, DAF et DPO une visibilité totale sur leur
 
 **Positionnement :** l'alternative européenne à Portkey/LiteLLM — hébergé en France, conforme AI Act, avec des interfaces pensées pour les décideurs non-techniques.
 
+**Choix stratégique :** LiteLLM est utilisé comme fondation (proxy core), pas réimplémenté. La valeur ajoutée est dans le dashboard de gouvernance, la conformité AI Act, et le packaging pour le marché français — pas dans le routage LLM que LiteLLM gère déjà très bien.
+
 ---
 
 ## Philosophie de développement
@@ -32,12 +34,12 @@ L'objectif : donner aux équipes DSI, DAF et DPO une visibilité totale sur leur
 ## Stack technique
 
 ```
-Backend    : Python 3.11+ / FastAPI
-Proxy core : LiteLLM (fork ou wrapper — à décider ensemble)
+Proxy core : LiteLLM proxy (configuré, pas réimplémenté)
+Dashboard  : Python 3.11+ / FastAPI + Jinja2 (HTML server-side)
 Base de données : PostgreSQL (asyncpg)
 Cache      : Redis (optionnel, sprint 2)
-Auth       : JWT + clés API virtuelles (HMAC SHA-256)
-Infra      : Docker + Docker Compose
+Auth       : Clés API virtuelles LiteLLM + auth admin session cookie
+Infra      : Docker + Docker Compose (gateway + postgres)
 Hébergement: Scaleway Paris (région fr-par-1)
 Monitoring : Prometheus + Grafana (sprint 2)
 Frontend   : Next.js 14 + Tailwind CSS (sprint 2)
@@ -45,54 +47,64 @@ Tests      : pytest + httpx (async)
 ```
 
 **Pourquoi ces choix :**
-- FastAPI : async natif, typage fort, OpenAPI auto-généré, standard industrie
-- LiteLLM : supporte 200+ providers, format OpenAI-compatible, MIT license
-- PostgreSQL : robuste, jsonb pour les logs flexibles, requêtes analytiques performantes
-- Docker Compose : déployable n'importe où, reproductible, simple à maintenir
+- LiteLLM proxy : le routing multi-provider est un problème résolu — on ne le réimplémente pas
+- FastAPI + Jinja2 : le dashboard sprint 1 est du HTML server-side, pas besoin de React pour des tableaux
+- PostgreSQL : LiteLLM peut logger directement dedans, on étend avec nos champs AI Act
+- Docker Compose : deux services en sprint 1 (litellm + postgres), extensible en sprint 2
 
 ---
 
 ## Architecture du projet
 
 ```
-gateway/
+docker-compose.yml           # litellm + postgres (+ redis sprint 2)
+litellm_config.yaml          # Configuration providers, virtual keys, budgets
+.env                         # Secrets (jamais en dur)
+
+dashboard/                   # Notre code — la valeur ajoutée
 ├── main.py                  # Entrypoint FastAPI
 ├── config.py                # Config via env vars (pydantic-settings)
 ├── database.py              # Connexion PostgreSQL (asyncpg pool)
 │
 ├── routers/
-│   ├── proxy.py             # Routes proxy LLM (/v1/chat/completions, etc.)
-│   ├── auth.py              # Gestion clés API virtuelles
-│   ├── budget.py            # Budget caps et alertes
-│   └── logs.py              # Consultation et export des logs
+│   ├── dashboard.py         # Pages HTML (Jinja2) — vue DAF/DPO
+│   ├── admin.py             # Gestion équipes, clés, budgets
+│   └── export.py            # Export CSV, rapport DPO
 │
 ├── services/
-│   ├── proxy_service.py     # Logique forwarding vers providers
-│   ├── token_counter.py     # Comptage tokens précis
-│   ├── cost_calculator.py   # Calcul coût en temps réel
-│   ├── budget_service.py    # Vérification et enforcement budgets
-│   └── log_service.py       # Écriture logs immuables
+│   ├── spend_service.py     # Agrégation consommation par équipe/période
+│   ├── budget_service.py    # Lecture budgets, calcul % consommé
+│   ├── alert_service.py     # Email/Slack à 80% et 100% budget
+│   └── aiact_service.py     # Hash intégrité, champs conformité, export DPO
 │
-├── models/
-│   ├── api_key.py           # Modèle clé API virtuelle
-│   ├── request_log.py       # Modèle log de requête
-│   ├── budget.py            # Modèle budget par équipe
-│   └── team.py              # Modèle équipe/organisation
-│
-├── middleware/
-│   ├── auth_middleware.py   # Validation clé API sur chaque requête
-│   ├── budget_middleware.py # Vérification budget avant forwarding
-│   └── log_middleware.py    # Logging automatique après chaque requête
+├── templates/               # Jinja2 HTML
+│   ├── overview.html        # Vue globale tokens + coût du mois
+│   ├── team.html            # Vue par équipe
+│   └── logs.html            # Historique avec filtres
 │
 ├── migrations/              # SQL migrations (pas d'ORM, SQL pur)
-│   ├── 001_initial.sql
+│   ├── 001_initial.sql      # Tables LiteLLM étendues + nos champs AI Act
 │   └── 002_budgets.sql
 │
 └── tests/
-    ├── test_proxy.py
+    ├── test_spend.py
     ├── test_budget.py
-    └── test_logs.py
+    └── test_aiact.py
 ```
+
+**Ce que LiteLLM gère (configuration, pas code) :**
+- Routing vers providers (OpenAI, Anthropic, Mistral, vLLM)
+- Virtual keys et auth
+- Logging tokens/coûts en PostgreSQL
+- Budget caps et blocage automatique
+- Streaming SSE
+
+**Ce qu'on code (notre valeur) :**
+- Dashboard lisible par un DAF
+- Champs de conformité AI Act (hash intégrité, classification use case)
+- Export DPO formaté
+- Alertes email/Slack
+- Packaging docker-compose clé en main
 
 ---
 
@@ -100,54 +112,44 @@ gateway/
 
 **Ce qu'on build dans ce sprint, rien de plus.**
 
-### Module 1 — Gateway proxy (semaines 1-2)
-- [ ] Endpoint `/v1/chat/completions` compatible OpenAI SDK
-- [ ] Support providers : OpenAI, Anthropic, Mistral (API), vLLM (local)
-- [ ] Forwarding de la requête vers le bon provider
-- [ ] Streaming support (Server-Sent Events)
-- [ ] Gestion des erreurs provider avec message clair
-- [ ] Overhead cible : < 10ms hors latence provider
+### Semaines 1-2 — Setup et configuration LiteLLM
+Pas de code proxy à écrire. On configure LiteLLM avec les providers, on valide que le routing fonctionne, on branche PostgreSQL pour les logs.
 
-### Module 2 — Auth et clés API (semaine 2)
-- [ ] Génération de clés API virtuelles (`gw_sk_...`)
-- [ ] Stockage sécurisé en BDD (hash SHA-256, jamais en clair)
-- [ ] Révocation instantanée d'une clé
-- [ ] Association clé → équipe → provider réel
-- [ ] Middleware d'authentification sur toutes les routes proxy
+- [ ] `docker-compose.yml` : litellm + postgres
+- [ ] `litellm_config.yaml` : providers OpenAI, Anthropic, Mistral, vLLM
+- [ ] Virtual keys configurées dans LiteLLM
+- [ ] Budget caps configurés dans LiteLLM
+- [ ] Logs qui tombent dans PostgreSQL
+- [ ] Test end-to-end : appel via clé virtuelle → log en BDD
+- [ ] Health check fonctionnel
 
-### Module 3 — Logging (semaines 2-3)
-- [ ] Log structuré à chaque requête : `{id, timestamp, api_key_id, team_id, provider, model, tokens_input, tokens_output, cost_eur, latency_ms, status, http_status}`
-- [ ] Écriture async en BDD (ne bloque pas la réponse)
-- [ ] Hash d'intégrité sur chaque log (SHA-256 du contenu)
-- [ ] Endpoint GET `/logs` avec filtres (équipe, date, modèle)
+### Semaines 2-4 — Le dashboard — notre vraie valeur
+Interface que le DAF comprend en 2 minutes. Chiffres clairs, tableaux, pas de graphiques complexes.
+
+- [ ] Auth admin (login/password, session cookie)
+- [ ] Page overview : tokens totaux, coût total du mois, nb requêtes, budget global
+- [ ] Vue par équipe : consommation, budget restant, % utilisé, top modèles
+- [ ] Tableau logs : timestamp, équipe, modèle, tokens, coût, latence, statut
+- [ ] Filtres logs : par équipe, par date, par modèle
 - [ ] Export CSV des logs
 
-### Module 4 — Comptage tokens et coûts (semaine 3)
-- [ ] Comptage tokens précis par provider (tiktoken pour OpenAI, tokenizer Mistral, etc.)
-- [ ] Table de pricing par modèle maintenue en config YAML
-- [ ] Calcul coût en euros à chaque requête
-- [ ] Mise à jour facile du pricing sans redéploiement
+### Semaines 4-5 — Champs AI Act
+LiteLLM logge les métadonnées basiques. On ajoute par-dessus ce qui manque pour la conformité.
 
-### Module 5 — Budget caps (semaines 3-4)
-- [ ] Budget mensuel configurable par équipe (en euros)
-- [ ] Vérification du budget **avant** chaque forwarding
-- [ ] Blocage avec HTTP 429 + message clair si budget dépassé
-- [ ] Alerte email à 80% et 100% du budget (SMTP simple)
-- [ ] Reset automatique du budget le 1er du mois
+- [ ] Hash d'intégrité SHA-256 sur chaque log (immuabilité)
+- [ ] Champ `use_case` sur chaque clé API (classification obligatoire AI Act)
+- [ ] Champ `data_residency` : confirmation que les données restent en EU
+- [ ] Export DPO : rapport formaté CSV/PDF sur une période
+- [ ] Alerte email/Slack à 80% et 100% du budget (SMTP + webhook Slack)
 
-### Module 6 — Dashboard minimal (semaines 4-6)
-- [ ] Page d'overview : tokens totaux, coût total du mois, nb requêtes
-- [ ] Vue par équipe : consommation, budget restant, top modèles
-- [ ] Tableau des derniers logs avec filtres
-- [ ] Aucun graphique complexe en sprint 1 — tableaux seulement
-- [ ] Auth basique (login/password pour l'admin)
+### Semaine 6 — Packaging
+`docker-compose up` et ça tourne dans le SI du client en 10 minutes.
 
-### Infra sprint 1
-- [ ] Docker Compose (gateway + postgres + redis optionnel)
-- [ ] Variables d'env via `.env` (jamais de secrets en dur)
-- [ ] Script de migration SQL au démarrage
-- [ ] Health check endpoint `/health`
-- [ ] README complet avec instructions de démarrage en 5 minutes
+- [ ] Variables d'env documentées dans `.env.example`
+- [ ] Script de migration SQL au démarrage automatique
+- [ ] README en français avec instructions de démarrage en 5 minutes
+- [ ] Guide de configuration providers (OpenAI, Anthropic, Mistral, vLLM)
+- [ ] Test de déploiement from scratch sur machine vierge
 
 ---
 
@@ -318,25 +320,30 @@ class Settings(BaseSettings):
 ## Commandes utiles
 
 ```bash
-# Démarrer en local
+# Démarrer en local (proxy + postgres)
 docker-compose up -d
-uvicorn gateway.main:app --reload --port 8000
+
+# Dashboard en dev (hot reload)
+uvicorn dashboard.main:app --reload --port 3000
 
 # Tests
-pytest tests/ -v
+pytest dashboard/tests/ -v
 
-# Migration BDD
-python -m gateway.migrations.run
-
-# Vérifier la santé
+# Vérifier la santé du proxy
 curl http://localhost:8000/health
+
+# Tester le proxy (appel via clé virtuelle)
+curl http://localhost:8000/v1/chat/completions \
+  -H "Authorization: Bearer gw_sk_xxx" \
+  -d '{"model": "gpt-4o-mini", "messages": [{"role": "user", "content": "test"}]}'
 ```
 
 ---
 
 ## Ce qu'on ne fait PAS en sprint 1
 
-- Pas de frontend complexe (tableaux HTML suffisent)
+- Pas de code proxy — LiteLLM le fait, on le configure
+- Pas de frontend React/Next.js — Jinja2 server-side suffit pour des tableaux
 - Pas de semantic caching
 - Pas de PII detection
 - Pas de SSO / OAuth
@@ -346,4 +353,4 @@ curl http://localhost:8000/health
 - Pas de pricing dynamique
 - Pas d'API de management programmatique complète
 
-Ces features existent — elles sont dans le sprint 3. Pour l'instant on ship un proxy qui fonctionne, qui logge, et qui bloque les dépassements de budget. C'est tout.
+Ces features existent — elles sont dans le sprint 3. Pour l'instant on ship LiteLLM configuré + un dashboard de gouvernance lisible par un DAF + les champs AI Act. C'est tout.
