@@ -17,8 +17,11 @@ services:
     build: ./dashboard
     ports:
       - "3000:3000"
+    volumes:
+      - ./dashboard:/app   # hot reload — source code mounted
     env_file:
       - .env
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "3000", "--reload"]
     depends_on:
       postgres:
         condition: service_healthy

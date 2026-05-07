@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Teams — PierceGate{% endblock %}
+
+{% block content %}
+
+<!-- Header -->
+<div class="flex items-center justify-between mb-8">
+  <div>
+    <h1 class="text-2xl font-bold text-slate-900">Teams</h1>
+    <p class="text-sm text-slate-500 mt-0.5">Budget and usage by team — {{ current_month }}</p>
+  </div>
+</div>
+
+<!-- Teams grid -->
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+
+  {% for team in teams %}
+  <a href="/teams/{{ team.id }}"
+     class="bg-white rounded-2xl p-6 shadow-sm ring-1 ring-slate-100 hover:ring-indigo-200 hover:shadow-md transition-all group">
+
+    <!-- Team header -->
+    <div class="flex items-center gap-3 mb-5">
+      <div class="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0 group-hover:bg-indigo-100 transition-colors">
+        <span class="text-sm font-bold text-indigo-600">{{ team.name[0] | upper }}</span>
+      </div>
+      <div class="min-w-0">
+        <p class="text-sm font-semibold text-slate-900 truncate">{{ team.name }}</p>
+        <p class="text-xs text-slate-400">{{ team.request_count }} requests this month</p>
+      </div>
+      <svg class="w-4 h-4 text-slate-300 group-hover:text-indigo-400 transition-colors ml-auto shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" />
+      </svg>
+    </div>
+
+    <!-- Budget bar -->
+    <div class="mb-3">
+      <div class="flex items-center justify-between mb-1.5">
+        <span class="text-xs text-slate-400">€{{ "%.2f"|format(team.spend) }} / €{{ "%.0f"|format(team.budget) }}</span>
+        <span class="text-xs font-semibold
+          {% if team.pct >= 80 %}text-red-600
+          {% elif team.pct >= 60 %}text-amber-500
+          {% else %}text-indigo-600{% endif %}">
+          {{ team.pct }}%
+        </span>
+      </div>
+      <div class="w-full bg-slate-100 rounded-full h-1.5">
+        <div class="h-1.5 rounded-full transition-all
+          {% if team.pct >= 80 %}bg-red-500
+          {% elif team.pct >= 60 %}bg-amber-400
+          {% else %}bg-indigo-500{% endif %}"
+          style="width: {{ [team.pct, 100] | min }}%">
+        </div>
+      </div>
+    </div>
+
+    <!-- Alert badge -->
+    {% if team.pct >= 80 %}
+    <div class="flex items-center gap-1.5 mt-3">
+      <svg class="w-3.5 h-3.5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+      </svg>
+      <span class="text-xs text-red-600 font-medium">Over 80% consumed</span>
+    </div>
+    {% endif %}
+
+  </a>
+  {% else %}
+
+  <!-- Empty state -->
+  <div class="col-span-full bg-white rounded-2xl shadow-sm ring-1 ring-slate-100 p-16 text-center">
+    <div class="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+      <svg class="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+      </svg>
+    </div>
+    <p class="text-sm font-medium text-slate-700 mb-1">No teams configured yet</p>
+    <p class="text-xs text-slate-400">Create teams via the LiteLLM admin API to see them here.</p>
+  </div>
+
+  {% endfor %}
+</div>
+
+{% endblock %}
