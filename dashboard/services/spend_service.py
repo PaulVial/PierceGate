@@ -102,6 +102,7 @@ async def get_team_detail(pool: asyncpg.Pool, team_id: str) -> dict | None:
         "active_keys": sum(1 for k in keys if not k["blocked"]),
         "api_keys": [
             {
+                "token": k["token"],
                 "prefix": k["token"][:12],
                 "name": k["key_alias"] or "",
                 "spend": float(k["spend"] or 0),
