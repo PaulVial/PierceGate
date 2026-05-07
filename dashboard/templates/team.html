@@ -1,6 +1,232 @@
 {% extends "base.html" %}
-{% block title %}Équipe — PierceGate{% endblock %}
+{% block title %}{{ team.name }} — PierceGate{% endblock %}
+
 {% block content %}
-<h1>Équipe</h1>
-<p>Vue détaillée par équipe — semaines 2-4.</p>
+
+<!-- Header -->
+<div class="flex items-center justify-between mb-8">
+  <div class="flex items-center gap-4">
+    <a href="/" class="text-gray-400 hover:text-gray-600 transition-colors">
+      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+      </svg>
+    </a>
+    <div>
+      <h1 class="text-2xl font-bold text-gray-900">{{ team.name }}</h1>
+      <p class="text-sm text-gray-500 mt-0.5">{{ current_month }}</p>
+    </div>
+  </div>
+
+  <!-- Budget badge -->
+  <div class="text-right">
+    <p class="text-xs text-gray-400 uppercase tracking-wide font-medium">Monthly budget</p>
+    <p class="text-2xl font-bold text-gray-900 mt-0.5">€{{ "%.0f"|format(team.budget) }}</p>
+  </div>
+</div>
+
+<!-- KPI cards -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+
+  <div class="bg-white rounded-xl p-5 shadow-sm ring-1 ring-gray-100">
+    <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Requests</p>
+    <p class="text-3xl font-bold text-gray-900 mt-2">{{ team.total_requests }}</p>
+    <p class="text-xs text-gray-400 mt-1">this month</p>
+  </div>
+
+  <div class="bg-white rounded-xl p-5 shadow-sm ring-1 ring-gray-100">
+    <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Cost</p>
+    <p class="text-3xl font-bold text-gray-900 mt-2">€{{ "%.2f"|format(team.spend) }}</p>
+    <p class="text-xs text-gray-400 mt-1">this month</p>
+  </div>
+
+  <div class="bg-white rounded-xl p-5 shadow-sm ring-1 ring-gray-100">
+    <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Budget used</p>
+    <p class="text-3xl font-bold mt-2
+      {% if team.pct >= 80 %}text-red-600
+      {% elif team.pct >= 60 %}text-amber-500
+      {% else %}text-emerald-600{% endif %}">
+      {{ team.pct }}%
+    </p>
+    <p class="text-xs text-gray-400 mt-1">€{{ "%.2f"|format(team.budget - team.spend) }} remaining</p>
+  </div>
+
+  <div class="bg-white rounded-xl p-5 shadow-sm ring-1 ring-gray-100">
+    <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">Active keys</p>
+    <p class="text-3xl font-bold text-gray-900 mt-2">{{ team.active_keys }}</p>
+    <p class="text-xs text-gray-400 mt-1">virtual API keys</p>
+  </div>
+
+</div>
+
+<!-- Budget bar (prominent) -->
+<div class="bg-white rounded-xl shadow-sm ring-1 ring-gray-100 p-6 mb-6">
+  <div class="flex items-center justify-between mb-3">
+    <p class="text-sm font-semibold text-gray-700">Budget consumption</p>
+    <p class="text-sm text-gray-500">€{{ "%.2f"|format(team.spend) }} / €{{ "%.0f"|format(team.budget) }}</p>
+  </div>
+  <div class="w-full bg-gray-100 rounded-full h-3">
+    <div class="h-3 rounded-full transition-all duration-500
+      {% if team.pct >= 80 %}bg-red-500
+      {% elif team.pct >= 60 %}bg-amber-400
+      {% else %}bg-emerald-500{% endif %}"
+      style="width: {{ [team.pct, 100] | min }}%">
+    </div>
+  </div>
+  {% if team.pct >= 80 %}
+  <p class="text-xs text-red-600 mt-2 font-medium">⚠ Budget alert — over 80% consumed</p>
+  {% endif %}
+</div>
+
+<!-- Spend chart + top models -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+
+  <!-- Daily spend chart -->
+  <div class="lg:col-span-2 bg-white rounded-xl shadow-sm ring-1 ring-gray-100">
+    <div class="px-6 py-4 border-b border-gray-100">
+      <h2 class="text-sm font-semibold text-gray-900">Daily spend — last 30 days</h2>
+    </div>
+    <div class="p-6">
+      <canvas id="spendChart" height="120"></canvas>
+    </div>
+  </div>
+
+  <!-- Top models -->
+  <div class="bg-white rounded-xl shadow-sm ring-1 ring-gray-100">
+    <div class="px-6 py-4 border-b border-gray-100">
+      <h2 class="text-sm font-semibold text-gray-900">Top models</h2>
+    </div>
+    <div class="p-6 space-y-4">
+      {% for model in top_models %}
+      <div>
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-xs font-medium text-gray-700">{{ model.name }}</span>
+          <span class="text-xs text-gray-500">{{ model.pct }}%</span>
+        </div>
+        <div class="w-full bg-gray-100 rounded-full h-1.5">
+          <div class="h-1.5 rounded-full bg-indigo-500" style="width: {{ model.pct }}%"></div>
+        </div>
+      </div>
+      {% else %}
+      <p class="text-xs text-gray-400">No data yet</p>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+
+<!-- API keys -->
+<div class="bg-white rounded-xl shadow-sm ring-1 ring-gray-100 overflow-hidden mb-6">
+  <div class="px-6 py-4 border-b border-gray-100">
+    <h2 class="text-sm font-semibold text-gray-900">API keys</h2>
+  </div>
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-gray-100 bg-gray-50">
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wide">Key</th>
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wide">Name</th>
+        <th class="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Spend</th>
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wide">Created</th>
+        <th class="px-6 py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wide">Status</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-50">
+      {% for key in api_keys %}
+      <tr class="hover:bg-gray-50 transition-colors">
+        <td class="px-6 py-3 font-mono text-xs text-gray-500">{{ key.prefix }}••••••••</td>
+        <td class="px-6 py-3 text-gray-700 font-medium">{{ key.name or '—' }}</td>
+        <td class="px-6 py-3 text-right text-gray-700">€{{ "%.4f"|format(key.spend) }}</td>
+        <td class="px-6 py-3 text-xs text-gray-500">{{ key.created_at }}</td>
+        <td class="px-6 py-3 text-center">
+          {% if key.is_active %}
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">active</span>
+          {% else %}
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">revoked</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" class="px-6 py-8 text-center text-sm text-gray-400">No API keys for this team</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Recent logs -->
+<div class="bg-white rounded-xl shadow-sm ring-1 ring-gray-100 overflow-hidden">
+  <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+    <h2 class="text-sm font-semibold text-gray-900">Recent requests</h2>
+    <a href="/logs?team={{ team.id }}" class="text-xs text-indigo-600 hover:text-indigo-700 font-medium">View all →</a>
+  </div>
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="border-b border-gray-100 bg-gray-50">
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wide">Time</th>
+        <th class="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wide">Model</th>
+        <th class="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Tokens</th>
+        <th class="px-6 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Cost</th>
+        <th class="px-6 py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wide">Status</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-50">
+      {% for log in recent_logs %}
+      <tr class="hover:bg-gray-50 transition-colors">
+        <td class="px-6 py-3 font-mono text-xs text-gray-500">{{ log.time }}</td>
+        <td class="px-6 py-3">
+          <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-indigo-50 text-indigo-700">
+            {{ log.model }}
+          </span>
+        </td>
+        <td class="px-6 py-3 text-right text-gray-600">{{ log.tokens }}</td>
+        <td class="px-6 py-3 text-right font-medium text-gray-900">€{{ "%.5f"|format(log.cost) }}</td>
+        <td class="px-6 py-3 text-center">
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">success</span>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" class="px-6 py-8 text-center text-sm text-gray-400">No requests yet</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Chart.js init -->
+<script>
+  const dailyData = {{ daily_spend | tojson }};
+  new Chart(document.getElementById('spendChart'), {
+    type: 'bar',
+    data: {
+      labels: dailyData.map(d => d.date),
+      datasets: [{
+        label: 'Cost (€)',
+        data: dailyData.map(d => d.cost),
+        backgroundColor: '#6366f1',
+        borderRadius: 4,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => `€${ctx.parsed.y.toFixed(4)}`
+          }
+        }
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 11 } } },
+        y: {
+          grid: { color: '#f3f4f6' },
+          ticks: { font: { size: 11 }, callback: v => `€${v.toFixed(2)}` }
+        }
+      }
+    }
+  });
+</script>
+
 {% endblock %}

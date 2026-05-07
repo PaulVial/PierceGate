@@ -1,6 +1,146 @@
 {% extends "base.html" %}
 {% block title %}Logs — PierceGate{% endblock %}
+
 {% block content %}
-<h1>Historique des requêtes</h1>
-<p>Tableau des logs — semaines 2-4.</p>
+
+<!-- Header -->
+<div class="flex items-center justify-between mb-8">
+  <div>
+    <h1 class="text-2xl font-bold text-gray-900">Request logs</h1>
+    <p class="text-sm text-gray-500 mt-0.5">{{ total_count }} requests — {{ current_month }}</p>
+  </div>
+  <a href="/export/logs?{{ query_string }}"
+     class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-white ring-1 ring-gray-200 text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
+    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+    </svg>
+    Export CSV
+  </a>
+</div>
+
+<!-- Filters -->
+<form method="get" class="bg-white rounded-xl shadow-sm ring-1 ring-gray-100 p-4 mb-6">
+  <div class="flex flex-wrap items-end gap-3">
+
+    <div class="flex flex-col gap-1">
+      <label class="text-xs font-medium text-gray-500">Period</label>
+      <select name="period"
+              class="text-sm border-0 ring-1 ring-gray-200 rounded-lg px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        <option value="month"   {% if filters.period == 'month'   %}selected{% endif %}>This month</option>
+        <option value="7d"      {% if filters.period == '7d'      %}selected{% endif %}>Last 7 days</option>
+        <option value="30d"     {% if filters.period == '30d'     %}selected{% endif %}>Last 30 days</option>
+        <option value="all"     {% if filters.period == 'all'     %}selected{% endif %}>All time</option>
+      </select>
+    </div>
+
+    <div class="flex flex-col gap-1">
+      <label class="text-xs font-medium text-gray-500">Model</label>
+      <select name="model"
+              class="text-sm border-0 ring-1 ring-gray-200 rounded-lg px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        <option value="">All models</option>
+        {% for m in available_models %}
+        <option value="{{ m }}" {% if filters.model == m %}selected{% endif %}>{{ m }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="flex flex-col gap-1">
+      <label class="text-xs font-medium text-gray-500">Status</label>
+      <select name="status"
+              class="text-sm border-0 ring-1 ring-gray-200 rounded-lg px-3 py-2 bg-gray-50 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        <option value="">All</option>
+        <option value="success" {% if filters.status == 'success' %}selected{% endif %}>Success</option>
+        <option value="error"   {% if filters.status == 'error'   %}selected{% endif %}>Error</option>
+        <option value="blocked" {% if filters.status == 'blocked' %}selected{% endif %}>Blocked</option>
+      </select>
+    </div>
+
+    <button type="submit"
+            class="px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">
+      Apply
+    </button>
+
+    {% if filters.model or filters.status or filters.period != 'month' %}
+    <a href="/logs" class="px-4 py-2 rounded-lg text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors">
+      Reset
+    </a>
+    {% endif %}
+
+  </div>
+</form>
+
+<!-- Logs table -->
+<div class="bg-white rounded-xl shadow-sm ring-1 ring-gray-100 overflow-hidden">
+  <div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-gray-100 bg-gray-50">
+          <th class="px-5 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wide">Time</th>
+          <th class="px-5 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wide">Model</th>
+          <th class="px-5 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Input</th>
+          <th class="px-5 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Output</th>
+          <th class="px-5 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Cost</th>
+          <th class="px-5 py-3 text-right text-xs font-medium text-gray-400 uppercase tracking-wide">Latency</th>
+          <th class="px-5 py-3 text-center text-xs font-medium text-gray-400 uppercase tracking-wide">Status</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-50">
+        {% for log in logs %}
+        <tr class="hover:bg-gray-50 transition-colors">
+          <td class="px-5 py-3 font-mono text-xs text-gray-500 whitespace-nowrap">{{ log.time }}</td>
+          <td class="px-5 py-3">
+            <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-indigo-50 text-indigo-700">
+              {{ log.model }}
+            </span>
+          </td>
+          <td class="px-5 py-3 text-right text-gray-600">{{ log.prompt_tokens }}</td>
+          <td class="px-5 py-3 text-right text-gray-600">{{ log.completion_tokens }}</td>
+          <td class="px-5 py-3 text-right font-medium text-gray-900">€{{ "%.5f"|format(log.cost) }}</td>
+          <td class="px-5 py-3 text-right text-gray-500">
+            {% if log.latency != '—' %}
+              <span class="{% if log.latency > 2000 %}text-amber-600{% else %}text-gray-500{% endif %}">
+                {{ log.latency }}ms
+              </span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="px-5 py-3 text-center">
+            {% if log.status == 'success' %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">success</span>
+            {% elif log.status == 'error' %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700">error</span>
+            {% else %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">{{ log.status }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="px-5 py-12 text-center text-sm text-gray-400">No requests found</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  {% if total_pages > 1 %}
+  <div class="px-5 py-4 border-t border-gray-100 flex items-center justify-between">
+    <p class="text-xs text-gray-400">
+      Page {{ page }} of {{ total_pages }}
+    </p>
+    <div class="flex items-center gap-1">
+      {% if page > 1 %}
+      <a href="?page={{ page - 1 }}&period={{ filters.period }}&model={{ filters.model }}&status={{ filters.status }}"
+         class="px-3 py-1.5 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition-colors">← Prev</a>
+      {% endif %}
+      {% if page < total_pages %}
+      <a href="?page={{ page + 1 }}&period={{ filters.period }}&model={{ filters.model }}&status={{ filters.status }}"
+         class="px-3 py-1.5 rounded-lg text-sm text-gray-600 hover:bg-gray-100 transition-colors">Next →</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
 {% endblock %}

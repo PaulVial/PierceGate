@@ -1,20 +1,81 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en" class="h-full bg-gray-50">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}PierceGate{% endblock %}</title>
-    <link rel="stylesheet" href="/static/style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}PierceGate{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { 600: '#6366f1', 700: '#4f46e5' }
+          }
+        }
+      }
+    }
+  </script>
 </head>
-<body>
-    <nav>
-        <span class="brand">PierceGate</span>
-        <a href="/">Vue globale</a>
-        <a href="/logs">Logs</a>
-        <a href="/admin">Admin</a>
-    </nav>
-    <main>
-        {% block content %}{% endblock %}
-    </main>
+<body class="h-full font-sans antialiased">
+
+  <!-- Top navigation -->
+  <nav class="bg-gray-900 border-b border-gray-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-14">
+
+        <!-- Logo -->
+        <div class="flex items-center gap-8">
+          <a href="/" class="flex items-center gap-2">
+            <div class="w-7 h-7 bg-indigo-500 rounded-md flex items-center justify-center">
+              <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+            </div>
+            <span class="text-white font-semibold text-sm tracking-wide">PierceGate</span>
+          </a>
+
+          <!-- Nav links -->
+          <div class="flex items-center gap-1">
+            <a href="/"
+               class="px-3 py-1.5 rounded-md text-sm font-medium
+                      {% if active_page == 'overview' %}bg-gray-800 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}
+                      transition-colors">
+              Overview
+            </a>
+            <a href="/logs"
+               class="px-3 py-1.5 rounded-md text-sm font-medium
+                      {% if active_page == 'logs' %}bg-gray-800 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}
+                      transition-colors">
+              Logs
+            </a>
+            <a href="/admin"
+               class="px-3 py-1.5 rounded-md text-sm font-medium
+                      {% if active_page == 'admin' %}bg-gray-800 text-white{% else %}text-gray-400 hover:text-white hover:bg-gray-800{% endif %}
+                      transition-colors">
+              Admin
+            </a>
+          </div>
+        </div>
+
+        <!-- Right side -->
+        <div class="flex items-center gap-3">
+          <span class="text-xs text-gray-500">{{ current_month }}</span>
+          <div class="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center">
+            <span class="text-white text-xs font-semibold">A</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </nav>
+
+  <!-- Page content -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    {% block content %}{% endblock %}
+  </main>
+
 </body>
 </html>
