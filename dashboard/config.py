@@ -4,6 +4,8 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     database_url: str
     secret_key: str
+    litellm_url: str = "http://litellm:8000"
+    litellm_master_key: str
     admin_user: str = "admin"
     admin_password: str
     smtp_host: str = ""

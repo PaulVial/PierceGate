@@ -4,6 +4,8 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
+from database import close_pool, init_pool
+from routers import admin, export, manage, pages
 from config import settings
 from database import close_pool, get_pool, init_pool, run_migrations
 from routers import export, pages
@@ -27,6 +29,8 @@ app.add_middleware(SessionMiddleware, secret_key=settings.secret_key)
 
 app.include_router(auth_router)
 app.include_router(pages.router)
+app.include_router(manage.router, prefix="/manage")
+app.include_router(admin.router, prefix="/admin")
 app.include_router(export.router, prefix="/export")
 
 
