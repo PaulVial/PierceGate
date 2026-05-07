@@ -6,6 +6,8 @@ class Settings(BaseSettings):
     secret_key: str
     litellm_url: str = "http://litellm:8000"
     litellm_master_key: str
+    admin_user: str = "admin"
+    admin_password: str
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_user: str = ""
