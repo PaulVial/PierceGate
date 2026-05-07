@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from config import settings
-from database import close_pool, init_pool
+from database import close_pool, get_pool, init_pool, run_migrations
 from routers import export, pages
 from routers.auth import AuthMiddleware, router as auth_router
 
@@ -13,6 +13,7 @@ from routers.auth import AuthMiddleware, router as auth_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_pool()
+    await run_migrations(get_pool())
     yield
     await close_pool()
 
