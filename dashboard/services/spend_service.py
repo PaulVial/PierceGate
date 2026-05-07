@@ -141,6 +141,40 @@ async def get_team_daily_spend(pool: asyncpg.Pool, team_id: str) -> list[dict]:
     return [{"date": str(r["day"]), "cost": float(r["cost"])} for r in rows]
 
 
+async def get_all_teams(pool: asyncpg.Pool) -> list[dict]:
+    year_month = datetime.now().strftime("%Y-%m")
+    rows = await pool.fetch(
+        """
+        SELECT
+            t.team_id, t.team_alias, t.max_budget, t.spend,
+            COALESCE(s.request_count, 0) AS request_count
+        FROM "LiteLLM_TeamTable" t
+        LEFT JOIN (
+            SELECT team_id, COUNT(*) AS request_count
+            FROM "LiteLLM_SpendLogs"
+            WHERE TO_CHAR("startTime", 'YYYY-MM') = $1
+            GROUP BY team_id
+        ) s ON s.team_id = t.team_id
+        ORDER BY t.team_alias
+        """,
+        year_month,
+    )
+    result = []
+    for r in rows:
+        budget = float(r["max_budget"] or 0)
+        spend = float(r["spend"] or 0)
+        pct = round(spend / budget * 100, 1) if budget > 0 else 0
+        result.append({
+            "id": r["team_id"],
+            "name": r["team_alias"] or r["team_id"],
+            "budget": budget,
+            "spend": spend,
+            "pct": pct,
+            "request_count": r["request_count"],
+        })
+    return result
+
+
 async def get_available_models(pool: asyncpg.Pool) -> list[str]:
     rows = await pool.fetch(
         'SELECT DISTINCT model FROM "LiteLLM_SpendLogs" ORDER BY model'

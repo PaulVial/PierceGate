@@ -6,6 +6,7 @@ from fastapi.templating import Jinja2Templates
 
 from database import get_pool
 from services.spend_service import (
+    get_all_teams,
     get_available_models,
     get_logs,
     get_model_distribution,
@@ -41,6 +42,17 @@ async def overview(request: Request):
         "model_distribution": model_distribution,
         "recent_logs": recent_logs,
         **base_context("overview"),
+    })
+
+
+@router.get("/teams", response_class=HTMLResponse)
+async def teams_list(request: Request):
+    pool = get_pool()
+    teams = await get_all_teams(pool)
+    return templates.TemplateResponse("teams_list.html", {
+        "request": request,
+        "teams": teams,
+        **base_context("teams"),
     })
 
 
