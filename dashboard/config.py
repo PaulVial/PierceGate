@@ -4,6 +4,8 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     database_url: str
     secret_key: str
+    admin_user: str = "admin"
+    admin_password: str
     smtp_host: str = ""
     smtp_port: int = 587
     smtp_user: str = ""

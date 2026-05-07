@@ -2,9 +2,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 
+from config import settings
 from database import close_pool, init_pool
-from routers import admin, export, pages
+from routers import export, pages
+from routers.auth import AuthMiddleware, router as auth_router
 
 
 @asynccontextmanager
@@ -17,8 +20,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="PierceGate Dashboard", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# SessionMiddleware must be added last so it wraps AuthMiddleware (runs first on requests)
+app.add_middleware(AuthMiddleware)
+app.add_middleware(SessionMiddleware, secret_key=settings.secret_key)
+
+app.include_router(auth_router)
 app.include_router(pages.router)
-app.include_router(admin.router, prefix="/admin")
 app.include_router(export.router, prefix="/export")
 
 

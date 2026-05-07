@@ -13,6 +13,16 @@ def _period_clause(period: str) -> str:
     return f"TO_CHAR(\"startTime\", 'YYYY-MM') = '{datetime.now().strftime('%Y-%m')}'"
 
 
+def _build_where(period: str, model: str) -> tuple[str, list]:
+    """Returns (where_sql, params) with parameterized user inputs."""
+    where = [_period_clause(period)]
+    params: list = []
+    if model:
+        params.append(model)
+        where.append(f"model = ${len(params)}")
+    return " AND ".join(where), params
+
+
 async def get_logs(
     pool: asyncpg.Pool,
     period: str = "month",
@@ -21,12 +31,10 @@ async def get_logs(
     page: int = 1,
     limit: int = 50,
 ) -> tuple[list[dict], int]:
-    where = [_period_clause(period)]
-    if model:
-        where.append(f"model = '{model}'")
-
-    where_sql = " AND ".join(where)
+    where_sql, params = _build_where(period, model)
     offset = (page - 1) * limit
+    limit_idx = len(params) + 1
+    offset_idx = len(params) + 2
 
     rows = await pool.fetch(
         f"""
@@ -36,12 +44,13 @@ async def get_logs(
         FROM "LiteLLM_SpendLogs"
         WHERE {where_sql}
         ORDER BY "startTime" DESC
-        LIMIT $1 OFFSET $2
+        LIMIT ${limit_idx} OFFSET ${offset_idx}
         """,
-        limit, offset,
+        *params, limit, offset,
     )
     total = await pool.fetchval(
-        f'SELECT COUNT(*) FROM "LiteLLM_SpendLogs" WHERE {where_sql}'
+        f'SELECT COUNT(*) FROM "LiteLLM_SpendLogs" WHERE {where_sql}',
+        *params,
     )
 
     logs = []
@@ -139,6 +148,41 @@ async def get_team_daily_spend(pool: asyncpg.Pool, team_id: str) -> list[dict]:
         team_id,
     )
     return [{"date": str(r["day"]), "cost": float(r["cost"])} for r in rows]
+
+
+async def get_logs_for_export(
+    pool: asyncpg.Pool,
+    period: str = "month",
+    model: str = "",
+) -> list[dict]:
+    where_sql, params = _build_where(period, model)
+    rows = await pool.fetch(
+        f"""
+        SELECT
+            "startTime", "endTime", model,
+            prompt_tokens, completion_tokens, total_tokens, spend, team_id
+        FROM "LiteLLM_SpendLogs"
+        WHERE {where_sql}
+        ORDER BY "startTime" DESC
+        """,
+        *params,
+    )
+    result = []
+    for r in rows:
+        latency = ""
+        if r["endTime"] and r["startTime"]:
+            latency = int((r["endTime"] - r["startTime"]).total_seconds() * 1000)
+        result.append({
+            "time": r["startTime"].strftime("%Y-%m-%d %H:%M:%S"),
+            "model": r["model"],
+            "team_id": r["team_id"] or "",
+            "prompt_tokens": r["prompt_tokens"] or 0,
+            "completion_tokens": r["completion_tokens"] or 0,
+            "total_tokens": r["total_tokens"] or 0,
+            "cost": float(r["spend"]),
+            "latency_ms": latency,
+        })
+    return result
 
 
 async def get_all_teams(pool: asyncpg.Pool) -> list[dict]:
